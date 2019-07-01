@@ -48,8 +48,10 @@ SOFTWARE.
 #define MAXSTRINGLEN		 80	/* Max string length */
 
 /* Local definitions: */
-#define MAX_MSG_SIZE		(2*1024) /* Maximum packet size */
+#define MAX_MSG_SIZE		(3*512) /* Maximum packet size */
 
+/* BOOTP Vendor Extensions  */
+#define	Extension_File 18
 
 /*
  * Return pointer to static string which gives full network error message.

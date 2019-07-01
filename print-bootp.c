@@ -388,6 +388,7 @@ cmu_print(bp, length)
 	int length;
 {
 	struct cmu_vend *v;
+	u_char *ep;
 
 	printf("-cmu");
 
@@ -396,6 +397,8 @@ cmu_print(bp, length)
 		printf(" |L=%d", length);
 		return;
 	}
+	/* Setup end pointer */
+	ep = bp + length;
 
 	/* Subnet mask */
 	if (v->v_flags & VF_SMASK) {

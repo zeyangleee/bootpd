@@ -667,7 +667,48 @@ catcher(sig)
 #endif
 }
 
-
+/*
+ * parse bootp request vend information 
+ */
+unsigned char bootpgetvend(unsigned char* options, unsigned char optcode, unsigned char optlen, void* optvalptr)
+{
+    unsigned char i;
+    
+    for (;;)
+    {
+        /* skip pad characters */
+        if(*options == 0) options++;
+
+        /* break if end reached */
+        else if(*options == 0xff) break;
+
+        /* check for desired option */
+        else if(*options == optcode)
+            {
+                /* found desired option
+                   limit size to actual option length */
+                optlen = (optlen < *(options+1)) ? optlen : *(options+1);
+
+                /* if(*(options+1) < optlen)
+                   optlen = *(options+1);
+                   copy contents of option */
+                for(i = 0; i < optlen; i++) *(((unsigned char*)optvalptr)+i) = *(options+i+2);
+
+                /* return length of option */
+                return *(options+1);
+            }
+        else
+            {
+                /* skip to next option */
+                options++;
+                options+=*options;
+                options++;
+            };
+    };
+    
+    /* failed to find desired option */
+    return 0;
+}
 
 /*
  * Process BOOTREQUEST packet.
@@ -695,7 +736,9 @@ handle_request()
 	char *homedir, *bootfile;
 	int n;
 	int lpos;
-
+	unsigned char *options;
+	unsigned char extensionfile[16]={0};
+	unsigned char getextensionlen = 0;
 	/* XXX - SLIP init: Set bp_ciaddr = recv_addr here? */
 
 	/*
@@ -949,6 +992,25 @@ HW addr type is IEEE 802.  convert to %s and check again\n",
 	if (hp->flags.bootfile)
 		bootfile = hp->bootfile->string;
 
+	/*
+	 * parse option  if vend infornation exits ，bootfile use
+	 * extension file
+	 */
+	options = &(bp->bp_vend[4]);
+	getextensionlen = bootpgetvend(options, Extension_File, 10, extensionfile);
+	if(getextensionlen != 0)
+	{
+		if(hp->flags.exten_file)
+		{
+			bootfile = hp->exten_file->string;
+		}
+		else
+		{
+			if (debug > 1) {
+			report(LOG_CRIT, "bootptab file no set exten information");
+			}
+		}		
+	}
 	/*
 	 * Construct bootfile path.
 	 */
@@ -1365,11 +1427,10 @@ dovend_rfc1048(bp, hp, bootsize)
 		{
 			byte *p, *ep;
 			byte tag, len;
-			unsigned short msgsz = 0;
+			short msgsz = 0;
 			
 			p = vp + 4;
-			//ep = p + BP_VEND_LEN - 4;
-			ep = ((char*)bp) + pktlen;	//process all recieved data
+			ep = p + BP_VEND_LEN - 4;
 			while (p < ep) {
 				tag = *p++;
 				/* Check for tags with no data first. */
@@ -1384,7 +1445,6 @@ dovend_rfc1048(bp, hp, bootsize)
 					if (len == 2) {
 						bcopy(p, (char*)&msgsz, 2);
 						msgsz = ntohs(msgsz);
-						if(msgsz > MAX_MSG_SIZE) msgsz = MAX_MSG_SIZE;
 					}
 					break;
 				case TAG_SUBNET_MASK:
@@ -1407,15 +1467,6 @@ dovend_rfc1048(bp, hp, bootsize)
 						);
 					}
 					break;
-				case 93:  //get arch, and check if it's UEFI boot
-					if(len==2)
-					{
-						unsigned short arch = ntohs(*(unsigned short*)p);
-						if(arch==7)
-						{
-							strncat(bp->bp_file, ".efi", sizeof(bp->bp_file)-1);
-						}
-					}
 #endif
 				} /* switch */
 				p += len;
